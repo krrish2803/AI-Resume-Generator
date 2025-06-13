@@ -13,7 +13,7 @@ load_dotenv()
 def get_mongo_connection():
     uri = os.getenv("MONGODB_URI")
     if not uri:
-        raise ValueError("MONGODB_URI not found in .env file")
+        raise ValueError("❌ MONGODB_URI not found in environment variables.")
 
     client = MongoClient(uri, server_api=ServerApi('1'))
     try:
@@ -25,7 +25,7 @@ def get_mongo_connection():
 
     return client
 
-# Perform cosine similarity manually
+# Cosine similarity calculator
 def cosine_similarity(vec1, vec2):
     vec1 = np.array(vec1)
     vec2 = np.array(vec2)
@@ -38,36 +38,35 @@ def semantic_search(query: str, top_k: int = 5):
 
     query_embedding = get_embedding(query)
     if not query_embedding:
+        print("⚠️ Could not compute query embedding.")
         return []
+
     documents = collection.find({"embedding": {"$exists": True}})
     results = []
 
     for doc in documents:
         doc_embedding = doc["embedding"]
         score = cosine_similarity(query_embedding, doc_embedding)
-        results.append((score, doc))
 
-    top_matches = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    return [doc for score, doc in top_matches]
+        # Add the score to each document
+        doc["score"] = score
+        results.append(doc)
 
+    # Sort documents by score
+    top_matches = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
+    return top_matches
 
-
-    # Sort and return top_k
-    results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    return results
-
-# Example usage
+# Test/CLI usage
 if __name__ == "__main__":
     query = input("Enter your job interest or skill (e.g., 'data science in healthcare'): ")
     top_matches = semantic_search(query)
-    print(f"Found {len(top_matches)} matches.")
 
-
-    print(f"\n🔍 Top matching jobs for: '{query}'\n")
-    for score, job in top_matches:
+    print(f"\n🔍 Top matching jobs for: '{query}' ({len(top_matches)} found)\n")
+    for job in top_matches:
         print(
-    f"🏢 {job.get('company_name', 'N/A')} - {job.get('job_title', 'N/A')} - {job.get('location', 'N/A')} - "
-    f"{job.get('seniority_level', 'N/A')} - {job.get('employment_type', 'N/A')} - {job.get('industry', 'N/A')}"
-)
-        print(f"🎯 Score: {round(score, 4)}")
+            f"🏢 {job.get('company_name', 'N/A')} - {job.get('job_title', 'N/A')} - "
+            f"{job.get('location', 'N/A')} - {job.get('seniority_level', 'N/A')} - "
+            f"{job.get('employment_type', 'N/A')} - {job.get('industry', 'N/A')}"
+        )
+        print(f"🎯 Score: {round(job.get('score', 0.0), 4)}")
         print("-" * 60)
